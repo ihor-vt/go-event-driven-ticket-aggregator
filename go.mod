@@ -8,6 +8,7 @@ require (
 	github.com/ThreeDotsLabs/watermill-redisstream v1.4.4
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/redis/go-redis/v9 v9.12.1
+	golang.org/x/sync v0.16.0
 )
 
 require (
