@@ -8,7 +8,6 @@ import (
 
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients"
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
-	"golang.org/x/sync/errgroup"
 
 	"tickets/adapters"
 	"tickets/message"
@@ -18,14 +17,6 @@ import (
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-
-	g, ctx := errgroup.WithContext(ctx)
-	defer func() {
-		if err := g.Wait(); err != nil {
-			slog.Error("application error", "error", err)
-			os.Exit(1)
-		}
-	}()
 
 	log.Init(slog.LevelInfo)
 
@@ -44,7 +35,7 @@ func main() {
 		redisClient,
 		spreadsheetsAPI,
 		receiptsService,
-	).Run(ctx, g)
+	).Run(ctx)
 	if err != nil {
 		panic(err)
 	}

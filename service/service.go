@@ -48,12 +48,17 @@ func New(
 	}
 }
 
-func (s Service) Run(ctx context.Context, g *errgroup.Group) error {
-	g.Go(func() error {
+func (s Service) Run(ctx context.Context) error {
+	errgrp, ctx := errgroup.WithContext(ctx)
+
+	errgrp.Go(func() error {
 		return s.watermillRouter.Run(ctx)
 	})
 
-	g.Go(func() error {
+	errgrp.Go(func() error {
+		<-s.watermillRouter.Running()
+		slog.Info("HTTP server starting on :8080")
+
 		err := s.echoRouter.Start(":8080")
 		if err != nil && !errors.Is(err, stdHTTP.ErrServerClosed) {
 			return err
@@ -61,10 +66,10 @@ func (s Service) Run(ctx context.Context, g *errgroup.Group) error {
 		return nil
 	})
 
-	g.Go(func() error {
+	errgrp.Go(func() error {
 		<-ctx.Done()
 		return s.echoRouter.Shutdown(ctx)
 	})
 
-	return nil
+	return errgrp.Wait()
 }
