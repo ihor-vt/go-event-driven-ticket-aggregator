@@ -16,7 +16,8 @@ import (
 )
 
 type Service struct {
-	echoRouter *echo.Echo
+	echoRouter      *echo.Echo
+	watermillRouter *watermillMessage.Router
 }
 
 func New(
@@ -29,7 +30,7 @@ func New(
 	var redisPublisher watermillMessage.Publisher
 	redisPublisher = message.NewRedisPublisher(redisClient, watermillLogger)
 
-	message.NewHandlers(
+	watermillRouter := message.NewWatermillRouter(
 		receiptsService,
 		spreadsheetsAPI,
 		redisClient,
@@ -42,10 +43,17 @@ func New(
 
 	return Service{
 		echoRouter,
+		watermillRouter,
 	}
 }
 
 func (s Service) Run(ctx context.Context) error {
+	go func() {
+		err := s.watermillRouter.Run(ctx)
+		if err != nil {
+			slog.With("error", err).Error("failed to run watermill router")
+		}
+	}()
 	err := s.echoRouter.Start(":8080")
 	if err != nil && !errors.Is(err, stdHTTP.ErrServerClosed) {
 		return err

@@ -2,10 +2,11 @@ package message
 
 import (
 	"context"
-	"log/slog"
+	"fmt"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-redisstream/pkg/redisstream"
+	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -17,15 +18,18 @@ type ReceiptsService interface {
 	IssueReceipt(ctx context.Context, ticketID string) error
 }
 
-func NewHandlers(
+func NewWatermillRouter(
 	receiptsService ReceiptsService,
 	spreadsheetsAPI SpreadsheetsAPI,
 	rdb *redis.Client,
 	watermillLogger watermill.LoggerAdapter,
-) {
+
+) *message.Router {
+	router := message.NewDefaultRouter(watermillLogger)
+
 	issueReceiptSub, err := redisstream.NewSubscriber(redisstream.SubscriberConfig{
 		Client:        rdb,
-		ConsumerGroup: "issue-receipt",
+		ConsumerGroup: "issue-reciept",
 	}, watermillLogger)
 	if err != nil {
 		panic(err)
@@ -33,47 +37,38 @@ func NewHandlers(
 
 	appendToTrackerSub, err := redisstream.NewSubscriber(redisstream.SubscriberConfig{
 		Client:        rdb,
-		ConsumerGroup: "append-to-tracker",
+		ConsumerGroup: "append-to-spreadsheet",
 	}, watermillLogger)
 	if err != nil {
 		panic(err)
 	}
 
-	go func() {
-		messages, err := issueReceiptSub.Subscribe(context.Background(), "issue-receipt")
-		if err != nil {
-			panic(err)
-		}
-
-		for msg := range messages {
+	router.AddConsumerHandler(
+		"issue_receipt",
+		"issue-receipt",
+		issueReceiptSub,
+		func(msg *message.Message) error {
 			err := receiptsService.IssueReceipt(msg.Context(), string(msg.Payload))
 			if err != nil {
-				slog.With("error", err).Error("Error issuing receipt")
-				msg.Nack()
-			} else {
-				msg.Ack()
+				return fmt.Errorf("failed to issue receipt: %w", err)
 			}
-		}
-	}()
 
-	go func() {
-		messages, err := appendToTrackerSub.Subscribe(context.Background(), "append-to-tracker")
-		if err != nil {
-			panic(err)
-		}
+			return nil
+		},
+	)
 
-		for msg := range messages {
-			err := spreadsheetsAPI.AppendRow(
+	router.AddConsumerHandler(
+		"append_to_tracker",
+		"append-to-tracker",
+		appendToTrackerSub,
+		func(msg *message.Message) error {
+			return spreadsheetsAPI.AppendRow(
 				msg.Context(),
 				"tickets-to-print",
 				[]string{string(msg.Payload)},
 			)
-			if err != nil {
-				slog.With("error", err).Error("Error appending to tracker")
-				msg.Nack()
-			} else {
-				msg.Ack()
-			}
-		}
-	}()
+		},
+	)
+
+	return router
 }
