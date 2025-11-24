@@ -14,17 +14,18 @@ import (
 
 	ticketsHttp "tickets/http"
 	"tickets/message"
+	"tickets/message/event"
 )
 
 type Service struct {
-	echoRouter      *echo.Echo
 	watermillRouter *watermillMessage.Router
+	echoRouter      *echo.Echo
 }
 
 func New(
 	redisClient *redis.Client,
-	spreadsheetsAPI message.SpreadsheetsAPI,
-	receiptsService message.ReceiptsService,
+	spreadsheetsAPI event.SpreadsheetsAPI,
+	receiptsService event.ReceiptsService,
 ) Service {
 	watermillLogger := watermill.NewSlogLogger(slog.Default())
 
@@ -43,8 +44,8 @@ func New(
 	)
 
 	return Service{
-		echoRouter,
 		watermillRouter,
+		echoRouter,
 	}
 }
 
@@ -56,19 +57,21 @@ func (s Service) Run(ctx context.Context) error {
 	})
 
 	errgrp.Go(func() error {
+		// we don't want to start HTTP server before Watermill router (so service won't be healthy before it's ready)
 		<-s.watermillRouter.Running()
-		slog.Info("HTTP server starting on :8080")
 
 		err := s.echoRouter.Start(":8080")
+
 		if err != nil && !errors.Is(err, stdHTTP.ErrServerClosed) {
 			return err
 		}
+
 		return nil
 	})
 
 	errgrp.Go(func() error {
 		<-ctx.Done()
-		return s.echoRouter.Shutdown(ctx)
+		return s.echoRouter.Shutdown(context.Background())
 	})
 
 	return errgrp.Wait()

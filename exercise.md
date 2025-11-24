@@ -1,44 +1,40 @@
-# Project: Health checks
+# Project: Handle Cancellations 
 
-You can now control how the service shuts down. Another good practice is being able to tell when it's up and ready to serve requests.
+{{background}}
 
-The simple, common way to do this is to expose an HTTP endpoint like `/health` that returns a 200 status code once the service is ready.
+With more tickets to handle, refunds also become more frequent.
+Because our webhook is asynchronous, it's possible that a ticket gets canceled
+right after the purchase because someone else bought it first.
+Right now, our operations team handles these cases manually; it's time we help them out a bit.
 
-Here's an example using Echo:
-
-```go
-e.GET("/health", func(c echo.Context) error {
-	return c.String(http.StatusOK, "ok")
-})
-```
-
-The Watermill Router exposes a `Running` method. It returns a channel that gets closed once the Router is ready.
-You can use it like this:
-
-```go
-<-router.Running()
-```
+{{endbackground}}
 
 ## Exercise
 
 Exercise path: ./project
 
-**Implement a health check endpoint in your project.**
+The new API includes a `status` field for each ticket.
+We should differentiate between `confirmed` and `canceled` tickets.
 
-1. Expose an HTTP `GET /health` endpoint that returns a `200` status code and an `ok` message.
+1. For each `confirmed` ticket, keep the current behavior: publishing the `TicketBookingConfirmed` event.
 
-2. Extend your service code, so it waits for the Router to be ready before starting the HTTP server.
-This way, the service is marked as healthy only when the Router is ready to process messages.
+2. For each `canceled` ticket, publish a new event instead: `TicketBookingCanceled`.
 
 ```go
-g.Go(func() error {
-	<-router.Running()
-	
-	err := e.Start(":8080")
-	if err != nil && !errors.Is(err, stdHTTP.ErrServerClosed) {
-		return err
-	}
-	
-	return nil
-})
+type TicketBookingCanceled struct {
+	Header        MessageHeader `json:"header"`
+	TicketID      string      `json:"ticket_id"`
+	CustomerEmail string      `json:"customer_email"`
+	Price         Money       `json:"price"`
+}
 ```
+
+3. **Add a new message handler for this event.**
+Remember to use a new subscriber with a unique consumer group.
+
+The new handler should append a row to the `tickets-to-refund` spreadsheet with the following columns:
+
+- Ticket ID
+- Customer Email
+- Price Amount
+- Price Currency

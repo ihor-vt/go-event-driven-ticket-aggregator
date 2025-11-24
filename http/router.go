@@ -19,7 +19,7 @@ func NewHttpRouter(publisher message.Publisher) *echo.Echo {
 		publisher: publisher,
 	}
 
-	e.POST("/tickets-confirmation", handler.PostTicketsConfirmation)
+	e.POST("/tickets-status", handler.PostTicketsStatus)
 
 	return e
 }

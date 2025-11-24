@@ -1,35 +1,25 @@
 package message
 
 import (
-	"context"
-	"fmt"
+	"encoding/json"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-redisstream/pkg/redisstream"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/redis/go-redis/v9"
+
+	"tickets/entities"
+	"tickets/message/event"
 )
 
-type SpreadsheetsAPI interface {
-	AppendRow(ctx context.Context, sheetName string, row []string) error
-}
-
-type ReceiptsService interface {
-	IssueReceipt(ctx context.Context, ticketID string) error
-}
-
-func NewWatermillRouter(
-	receiptsService ReceiptsService,
-	spreadsheetsAPI SpreadsheetsAPI,
-	rdb *redis.Client,
-	watermillLogger watermill.LoggerAdapter,
-
-) *message.Router {
+func NewWatermillRouter(receiptsService event.ReceiptsService, spreadsheetsAPI event.SpreadsheetsAPI, rdb *redis.Client, watermillLogger watermill.LoggerAdapter) *message.Router {
 	router := message.NewDefaultRouter(watermillLogger)
+
+	handler := event.NewHandler(spreadsheetsAPI, receiptsService)
 
 	issueReceiptSub, err := redisstream.NewSubscriber(redisstream.SubscriberConfig{
 		Client:        rdb,
-		ConsumerGroup: "issue-reciept",
+		ConsumerGroup: "issue-receipt",
 	}, watermillLogger)
 	if err != nil {
 		panic(err)
@@ -37,7 +27,7 @@ func NewWatermillRouter(
 
 	appendToTrackerSub, err := redisstream.NewSubscriber(redisstream.SubscriberConfig{
 		Client:        rdb,
-		ConsumerGroup: "append-to-spreadsheet",
+		ConsumerGroup: "append-to-tracker",
 	}, watermillLogger)
 	if err != nil {
 		panic(err)
@@ -45,28 +35,31 @@ func NewWatermillRouter(
 
 	router.AddConsumerHandler(
 		"issue_receipt",
-		"issue-receipt",
+		"TicketBookingConfirmed",
 		issueReceiptSub,
 		func(msg *message.Message) error {
-			err := receiptsService.IssueReceipt(msg.Context(), string(msg.Payload))
+			var event entities.TicketBookingConfirmed
+			err := json.Unmarshal(msg.Payload, &event)
 			if err != nil {
-				return fmt.Errorf("failed to issue receipt: %w", err)
+				return err
 			}
 
-			return nil
+			return handler.IssueReceipt(msg.Context(), event)
 		},
 	)
 
 	router.AddConsumerHandler(
 		"append_to_tracker",
-		"append-to-tracker",
+		"TicketBookingConfirmed",
 		appendToTrackerSub,
 		func(msg *message.Message) error {
-			return spreadsheetsAPI.AppendRow(
-				msg.Context(),
-				"tickets-to-print",
-				[]string{string(msg.Payload)},
-			)
+			var event entities.TicketBookingConfirmed
+			err := json.Unmarshal(msg.Payload, &event)
+			if err != nil {
+				return err
+			}
+
+			return handler.AppendToTracker(msg.Context(), event)
 		},
 	)
 
