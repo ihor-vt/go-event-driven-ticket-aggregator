@@ -50,6 +50,25 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 			if err != nil {
 				return err
 			}
+		} else if ticket.Status == "canceled" {
+			event := entities.TicketBookingCanceled{
+				Header:        entities.NewMessageHeader(),
+				TicketID:      ticket.TicketID,
+				CustomerEmail: ticket.CustomerEmail,
+				Price:         ticket.Price,
+			}
+
+			payload, err := json.Marshal(event)
+			if err != nil {
+				return err
+			}
+
+			msg := message.NewMessage(watermill.NewUUID(), payload)
+
+			err = h.publisher.Publish("TicketBookingCanceled", msg)
+			if err != nil {
+				return err
+			}
 		} else {
 			return fmt.Errorf("unknown ticket status: %s", ticket.Status)
 		}
