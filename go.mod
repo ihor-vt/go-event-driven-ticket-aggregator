@@ -3,9 +3,10 @@ module tickets
 go 1.24
 
 require (
-	github.com/ThreeDotsLabs/go-event-driven/v2 v2.0.0
+	github.com/ThreeDotsLabs/go-event-driven/v2 v2.0.3
 	github.com/ThreeDotsLabs/watermill v1.5.1
 	github.com/ThreeDotsLabs/watermill-redisstream v1.4.4
+	github.com/google/uuid v1.6.0
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/redis/go-redis/v9 v9.12.1
 	golang.org/x/sync v0.16.0
@@ -18,6 +19,7 @@ require (
 	github.com/Joker/jade v1.1.3 // indirect
 	github.com/Rican7/retry v0.3.1 // indirect
 	github.com/Shopify/goreferrer v0.0.0-20250513162709-b78e2829e40b // indirect
+	github.com/ThreeDotsLabs/humanslog v0.0.0-20251212101824-8c477a7aa7fa // indirect
 	github.com/andybalholm/brotli v1.1.1 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
@@ -40,7 +42,6 @@ require (
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/gomarkdown/markdown v0.0.0-20250311123330-531bef5e742b // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/iris-contrib/schema v0.0.6 // indirect
 	github.com/josharian/intern v1.0.0 // indirect

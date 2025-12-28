@@ -14,6 +14,7 @@ import (
 
 func NewWatermillRouter(receiptsService event.ReceiptsService, spreadsheetsAPI event.SpreadsheetsAPI, rdb *redis.Client, watermillLogger watermill.LoggerAdapter) *message.Router {
 	router := message.NewDefaultRouter(watermillLogger)
+	useMiddlewares(router)
 
 	handler := event.NewHandler(spreadsheetsAPI, receiptsService)
 
