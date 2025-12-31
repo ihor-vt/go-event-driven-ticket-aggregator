@@ -1,40 +1,21 @@
-# Project: Handle Cancellations 
+# Project: Testing Ticket Cancellation
 
-{{background}}
-
-With more tickets to handle, refunds also become more frequent.
-Because our webhook is asynchronous, it's possible that a ticket gets canceled
-right after the purchase because someone else bought it first.
-Right now, our operations team handles these cases manually; it's time we help them out a bit.
-
-{{endbackground}}
+Now that we covered the happy path scenario, let's consider the ticket cancellation.
 
 ## Exercise
 
 Exercise path: ./project
 
-The new API includes a `status` field for each ticket.
-We should differentiate between `confirmed` and `canceled` tickets.
+Based on the previous steps, **write tests for ticket cancellation.**
 
-1. For each `confirmed` ticket, keep the current behavior: publishing the `TicketBookingConfirmed` event.
+1. Call the API again with ticket's `status` set to `canceled`.
+2. Assert that the ticket has been added to the `tickets-to-refund` sheet.
 
-2. For each `canceled` ticket, publish a new event instead: `TicketBookingCanceled`.
+{{tip}}
 
-```go
-type TicketBookingCanceled struct {
-	Header        MessageHeader `json:"header"`
-	TicketID      string      `json:"ticket_id"`
-	CustomerEmail string      `json:"customer_email"`
-	Price         Money       `json:"price"`
-}
-```
+When adding tests to existing functionality, it's a good practice to use the *test sabotage* technique.
 
-3. **Add a new message handler for this event.**
-Remember to use a new subscriber with a unique consumer group.
+Write the test, make it pass, and then break the code to see if the test fails.
+This approach has saved us many times from having tests that weren't testing anything.
 
-The new handler should append a row to the `tickets-to-refund` spreadsheet with the following columns:
-
-- Ticket ID
-- Customer Email
-- Price Amount
-- Price Currency
+{{endtip}}

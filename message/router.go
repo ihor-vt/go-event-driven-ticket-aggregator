@@ -17,6 +17,8 @@ func NewWatermillRouter(receiptsService event.ReceiptsService, spreadsheetsAPI e
 
 	handler := event.NewHandler(spreadsheetsAPI, receiptsService)
 
+	useMiddlewares(router, watermillLogger)
+
 	issueReceiptSub, err := redisstream.NewSubscriber(redisstream.SubscriberConfig{
 		Client:        rdb,
 		ConsumerGroup: "issue-receipt",
@@ -46,10 +48,15 @@ func NewWatermillRouter(receiptsService event.ReceiptsService, spreadsheetsAPI e
 		"TicketBookingConfirmed",
 		issueReceiptSub,
 		func(msg *message.Message) error {
+
 			var event entities.TicketBookingConfirmed
 			err := json.Unmarshal(msg.Payload, &event)
 			if err != nil {
 				return err
+			}
+
+			if event.Price.Currency == "" {
+				event.Price.Currency = "USD"
 			}
 
 			return handler.IssueReceipt(msg.Context(), event)
@@ -61,10 +68,15 @@ func NewWatermillRouter(receiptsService event.ReceiptsService, spreadsheetsAPI e
 		"TicketBookingConfirmed",
 		appendToTrackerSub,
 		func(msg *message.Message) error {
+
 			var event entities.TicketBookingConfirmed
 			err := json.Unmarshal(msg.Payload, &event)
 			if err != nil {
 				return err
+			}
+
+			if event.Price.Currency == "" {
+				event.Price.Currency = "USD"
 			}
 
 			return handler.AppendToTracker(msg.Context(), event)
@@ -76,6 +88,7 @@ func NewWatermillRouter(receiptsService event.ReceiptsService, spreadsheetsAPI e
 		"TicketBookingCanceled",
 		cancelTicketSub,
 		func(msg *message.Message) error {
+
 			var event entities.TicketBookingCanceled
 			err := json.Unmarshal(msg.Payload, &event)
 			if err != nil {
