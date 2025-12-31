@@ -4,10 +4,29 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients"
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients/spreadsheets"
 )
+
+type SpreadsheetsAPIStub struct {
+	lock sync.Mutex
+	Rows map[string][][]string
+}
+
+func (c *SpreadsheetsAPIStub) AppendRow(ctx context.Context, spreadsheetName string, row []string) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if c.Rows == nil {
+		c.Rows = make(map[string][][]string)
+	}
+
+	c.Rows[spreadsheetName] = append(c.Rows[spreadsheetName], row)
+
+	return nil
+}
 
 type SpreadsheetsAPIClient struct {
 	// we are not mocking this client: it's pointless to use interface here
