@@ -2,13 +2,15 @@ package message
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
+	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 )
 
-func useMiddlewares(router *message.Router) {
+func useMiddlewares(router *message.Router, watermilLogger watermill.LoggerAdapter) {
 	router.AddMiddleware(middleware.Recoverer)
 
 	router.AddMiddleware(func(next message.HandlerFunc) message.HandlerFunc {
@@ -27,16 +29,28 @@ func useMiddlewares(router *message.Router) {
 
 	router.AddMiddleware(func(next message.HandlerFunc) message.HandlerFunc {
 		return func(msg *message.Message) ([]*message.Message, error) {
-			logger := slog.With(
-				"message_id", msg.UUID,
-				"payload", string(msg.Payload),
-				"metadata", msg.Metadata,
-				"handler", message.HandlerNameFromCtx(msg.Context()),
+			logger := log.FromContext(msg.Context()).With(
+				slog.String("message_id", msg.UUID),
+				slog.String("payload", string(msg.Payload)),
+				slog.Any("metadata", msg.Metadata),
+				slog.String("handler", message.HandlerNameFromCtx(msg.Context())),
 			)
 
 			logger.Info("Handling a message")
+			msgs, err := next(msg)
+			if err != nil {
+				logger.Error("Error while handling a message", slog.String("error", err.Error()))
+			}
 
-			return next(msg)
+			return msgs, err
 		}
 	})
+
+	router.AddMiddleware(middleware.Retry{
+		MaxRetries:      10,
+		InitialInterval: time.Microsecond * 100,
+		MaxInterval:     time.Second,
+		Multiplier:      2,
+		Logger:          watermilLogger,
+	}.Middleware)
 }

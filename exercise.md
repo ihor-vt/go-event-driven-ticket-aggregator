@@ -1,109 +1,104 @@
-# Project: Correlation ID
+# Malformed messages
 
-In bigger projects, it might make sense to use your own middleware to set the correlation ID.
-It should check if the correlation ID is already present in the message's metadata and, if so,
-add it to the message's context. Any further requests and messages can then use the same correlation ID.
+As much as retrying is useful most of the time, it doesn't work in all cases.
 
-{{tip}}
+One example is a *malformed message*. This is a message that cannot be processed not because of an error on the handler side
+but because the handler doesn't understand it. This could be a broken JSON payload or a message sent to the wrong topic.
 
-`context.Context` is often used to pass arbitrary data between functions.
-You shouldn't overuse it, but it works well for passing data that's not directly related to the function's logic.
+In this scenario, **you need to remove the message from the queue.**
 
-A good rule of thumb is that the function should work the same way when a `context.Background()` is passed to it.
-Keep the values optional.
+We will show a few more advanced tools for this in future modules.
+But sometimes simple approaches are more than enough.
 
-{{endtip}}
+For now, let's consider a dead-simple approach to handling a malformed message: acknowledge and ignore it.
+Your handler can remove the message by returning `nil` early instead of an error.
 
-First, retrieve the correlation ID from the message's metadata:
-
-```go
-correlationID := msg.Metadata.Get("correlation_id")
-```
-
-If it's not present, it's a good idea to generate a new one.
-Even if you don't see the full context this way, you can trace at least a part of the request.
+For example, if it's an invalid message schema, you can check the metadata for it:
 
 ```go
-if correlationID == "" {
-	correlationID = shortuuid.New()
+if msg.Metadata.Get("type") != "booking.created" {
+	slog.Error("Invalid message type")
+	return nil
 }
 ```
 
+It's always worth logging the message payload so you can investigate it later.
+Otherwise, you won't know what went wrong.
+
+### Removing a particular message
+
+If there's a particular message that got published by mistake and can't be unmarshalled,
+you can check its UUID.
+
+```go
+if msg.UUID == "5f810ce3-222b-4626-bc04-cbfb460c98c7" {
+	return nil
+}
+```
+
+It's a primitive way of doing this, but it works and might be good enough for your use case.
+It helps if you have a healthy CI/CD pipeline and can quickly deploy a new version of the service.
+Sometimes that's a pragmatic choice if you were to spend too much time on this.
+
 {{tip}}
 
-If you want to make it more obvious that the correlation ID was missing,
-you can add a prefix to the newly generated one, like `gen_`.
+If you use this method, you need to make sure all your messages have a unique UUID!
+This is why you shouldn't publish the same message twice.
 
 {{endtip}}
 
-To add the correlationID to the context, you can use the `log.ContextWithCorrelationID` function from our training's [common package](https://github.com/ThreeDotsLabs/go-event-driven).
-Then, set the context on the message, so it's propagated to the handler.
+### Handling permanent errors
+
+It may happen that errors on the business domain level are not retryable.
+If you know this beforehand, you can create a dedicated error type and middleware that handles it.
 
 ```go
-ctx := log.ContextWithCorrelationID(msg.Context(), correlationID)
+type PermanentError interface {
+	IsPermanent() bool
+}
 
-msg.SetContext(ctx)
+func SkipPermanentErrorsMiddleware(h message.HandlerFunc) message.HandlerFunc {
+	return func(msg *message.Message) ([]*message.Message, error) {
+		msgs, err := h(msg)
+
+		var permErr PermanentError
+		if errors.As(err, &permErr) && permErr.IsPermanent() {
+			return nil, nil
+		}
+
+		return msgs, err
+	}
+}
+```
+
+You can then use it in your application logic.
+For example, if the message misses a critical field, there's no point in retrying it.
+It's a good idea to raise some kind of alert when this error occurs.
+
+```go
+type MissingInvoiceNumber struct {}
+
+func (m MissingInvoiceNumber) Error() string {
+	return "missing the invoice number - can't continue"
+}
+
+func (m MissingInvoiceNumber) IsPermanent() bool {
+	return true
+}
 ```
 
 ## Exercise
 
 Exercise path: ./project
 
-**Add end-to-end correlation ID support to the project.**
+Handle two types of malformed messages in your project:
 
-```mermaid
-flowchart LR
-    A[HTTP Request<br/>Correlation-ID header] --> B[Message<br/>metadata]
-    B --> C[Code<br/>context]
-    C --> D[Message<br/>metadata]
-    D --> E[HTTP Request<br/>Correlation-ID header]
+1. **A `TicketBookingConfirmed` event with invalid JSON payload and ID `2beaf5bc-d5e4-4653-b075-2b36bbf28949` has been published.**
 
-    style A fill:#e1f5fe
-    style E fill:#e1f5fe
-    style B fill:#f3e5f5
-    style D fill:#f3e5f5
-    style C fill:#fff3e0
-```
+Update your handlers to detect, ignore, and acknowledge this specific message.
 
-1. For all messages you publish, propagate the correlation ID from the HTTP `Correlation-ID` header
-into the `correlation_id` metadata, like this:
+2. **An event was published to the `TicketBookingConfirmed` topic, but its `type` metadata was incorrectly set to `TicketBooking` instead of `TicketBookingConfirmed`.**
 
-```go
-msg.Metadata.Set("correlation_id", c.Request().Header.Get("Correlation-ID"))
-```
-
-2. Add middleware to the router to propagate the correlation ID from the message's metadata to its context, as described above.
-
-3. Finally modify the `apiClients` constructor in `main.go`.
-
-Add a *request editor* that propagates the correlation ID from the context to the HTTP request's header.
-This function will be called for every HTTP request made.
-
-```go
-apiClients, err := clients.NewClients(
-	os.Getenv("GATEWAY_ADDR"),
-	func(ctx context.Context, req *http.Request) error {
-		req.Header.Set("Correlation-ID", log.CorrelationIDFromContext(ctx))
-		return nil
-	},
-)
-```
-
-Your correlation ID should now be propagated from incoming HTTP requests,
-through the messages, and to the external HTTP calls.
-
-{{tip}}
-
-In your handlers, make sure to pass the `msg.Context()` to the external HTTP calls, like this:
-
-```go
-// ...
-receiptsService.IssueReceipt(msg.Context())
-
-// ...
-spreadsheetsAPI.AppendRow(msg.Context())
-```
-
-If you pass `context.Background()`, the correlation ID won't be propagated (because it's not in the context).
-
-{{endtip}}
+When publishing `TicketBookingConfirmed` and `TicketBookingCanceled` events from your service, always set the correct `type` metadata so the event type can be verified.  
+**Later, ensure that all events on the topic have the correct `type` metadata and that it matches the expected value.**
+Make your handlers ignore and acknowledge invalid messages.
