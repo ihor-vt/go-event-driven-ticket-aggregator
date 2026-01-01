@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sync"
 	"tickets/entities"
 
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients"
@@ -13,18 +12,6 @@ import (
 
 type SpreadsheetsAPI interface {
 	AppendRow(ctx context.Context, sheetName string, row []string) error
-}
-
-type ReceiptsServiceStub struct {
-	lock           sync.Mutex
-	IssuedReceipts []entities.IssueReceiptRequest
-}
-
-func (s *ReceiptsServiceStub) IssueReceipt(ctx context.Context, request entities.IssueReceiptRequest) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	s.IssuedReceipts = append(s.IssuedReceipts, request)
-	return nil
 }
 
 type ReceiptsServiceClient struct {

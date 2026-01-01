@@ -12,10 +12,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/lithammer/shortuuid/v3"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"tickets/adapters"
+	dbAdapters "tickets/db"
 	"tickets/entities"
 	ticketsHttp "tickets/http"
 	"tickets/message"
@@ -36,7 +38,8 @@ func TestComponent(t *testing.T) {
 	defer cancel()
 
 	spreadsheetsAPI := &adapters.SpreadsheetsAPIStub{}
-	receiptsService := &adapters.ReceiptsServiceStub{}
+	receiptsService := &adapters.ReceiptsServiceStub{IssuedReceipts: map[string]entities.IssueReceiptRequest{}}
+	filesAPI := &adapters.FilesApiStub{}
 
 	go func() {
 		svc := service.New(
@@ -44,7 +47,7 @@ func TestComponent(t *testing.T) {
 			redisClient,
 			spreadsheetsAPI,
 			receiptsService,
-			nil, // todo: pass files API
+			filesAPI,
 		)
 		assert.NoError(t, svc.Run(ctx))
 	}()
@@ -61,31 +64,63 @@ func TestComponent(t *testing.T) {
 		CustomerEmail: "email@example.com",
 	}
 
-	sendTicketsStatus(
-		t,
-		ticketsHttp.TicketsStatusRequest{
-			Tickets: []ticketsHttp.TicketStatusRequest{ticket},
-		},
-	)
+	idempotencyKey := uuid.NewString()
+
+	// check idempotency
+	for i := 0; i < 3; i++ {
+		sendTicketsStatus(
+			t,
+			ticketsHttp.TicketsStatusRequest{
+				Tickets: []ticketsHttp.TicketStatusRequest{ticket},
+			},
+			idempotencyKey,
+		)
+	}
 
 	assertReceiptForTicketIssued(t, receiptsService, ticket)
+	assertTicketPrinted(t, filesAPI, ticket)
 	assertRowToSheetAdded(
 		t,
 		spreadsheetsAPI,
 		ticket,
 		"tickets-to-print",
 	)
+	assertTicketStoredInRepository(t, db, ticket)
 
 	ticket.Status = "canceled"
 	sendTicketsStatus(t, ticketsHttp.TicketsStatusRequest{
 		Tickets: []ticketsHttp.TicketStatusRequest{ticket},
-	})
+	}, uuid.NewString())
 
 	assertRowToSheetAdded(
 		t,
 		spreadsheetsAPI,
 		ticket,
 		"tickets-to-refund",
+	)
+}
+
+func assertTicketStoredInRepository(t *testing.T, db *sqlx.DB, ticket ticketsHttp.TicketStatusRequest) {
+	ticketsRepo := dbAdapters.NewTicketsRepository(db)
+
+	assert.Eventually(
+		t,
+		func() bool {
+			tickets, err := ticketsRepo.FindAll(context.Background())
+			if err != nil {
+				return false
+			}
+
+			for _, t := range tickets {
+				if t.TicketID == ticket.TicketID {
+					return true
+				}
+			}
+
+			return false
+		},
+		10*time.Second,
+		100*time.Millisecond,
 	)
 }
 
@@ -132,6 +167,26 @@ func assertRowToSheetAdded(t *testing.T, spreadsheetsAPI *adapters.SpreadsheetsA
 	)
 }
 
+func assertTicketPrinted(t *testing.T, filesAPI *adapters.FilesApiStub, ticket ticketsHttp.TicketStatusRequest) bool {
+	return assert.EventuallyWithT(
+		t,
+		func(t *assert.CollectT) {
+			content, err := filesAPI.DownloadFile(context.Background(), ticket.TicketID+"-ticket.html")
+			if !assert.NoError(t, err) {
+				return
+			}
+
+			if assert.NotEmpty(t, content) {
+				return
+			}
+
+			assert.Contains(t, content, ticket.TicketID)
+		},
+		10*time.Second,
+		100*time.Millisecond,
+	)
+}
+
 func assertReceiptForTicketIssued(t *testing.T, receiptsService *adapters.ReceiptsServiceStub, ticket ticketsHttp.TicketStatusRequest) {
 	t.Helper()
 
@@ -143,22 +198,15 @@ func assertReceiptForTicketIssued(t *testing.T, receiptsService *adapters.Receip
 			issuedReceipts := len(receiptsService.IssuedReceipts)
 			parentT.Log("issued receipts", issuedReceipts)
 
-			assert.Greater(t, issuedReceipts, 0, "no receipts issued")
+			assert.Equal(t, 1, issuedReceipts, "receipt for ticket %s not found", ticket.TicketID)
 		},
 		10*time.Second,
 		100*time.Millisecond,
 	)
 
-	var receipt entities.IssueReceiptRequest
-	var ok bool
-	for _, issuedReceipt := range receiptsService.IssuedReceipts {
-		if issuedReceipt.TicketID != ticket.TicketID {
-			continue
-		}
-		receipt = issuedReceipt
-		ok = true
-		break
-	}
+	receipt, ok := lo.Find(lo.Values(receiptsService.IssuedReceipts), func(r entities.IssueReceiptRequest) bool {
+		return r.TicketID == ticket.TicketID
+	})
 	require.Truef(t, ok, "receipt for ticket %s not found", ticket.TicketID)
 
 	assert.Equal(t, ticket.TicketID, receipt.TicketID)
@@ -166,7 +214,7 @@ func assertReceiptForTicketIssued(t *testing.T, receiptsService *adapters.Receip
 	assert.Equal(t, ticket.Price.Currency, receipt.Price.Currency)
 }
 
-func sendTicketsStatus(t *testing.T, req ticketsHttp.TicketsStatusRequest) {
+func sendTicketsStatus(t *testing.T, req ticketsHttp.TicketsStatusRequest, idempotencyKey string) {
 	t.Helper()
 
 	payload, err := json.Marshal(req)
@@ -182,6 +230,7 @@ func sendTicketsStatus(t *testing.T, req ticketsHttp.TicketsStatusRequest) {
 	require.NoError(t, err)
 
 	httpReq.Header.Set("Correlation-ID", correlationID)
+	httpReq.Header.Set("Idempotency-Key", idempotencyKey)
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(httpReq)
