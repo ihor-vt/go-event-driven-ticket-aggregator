@@ -13,6 +13,9 @@ import (
 	"tickets/adapters"
 	"tickets/message"
 	"tickets/service"
+
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -32,10 +35,17 @@ func main() {
 	redisClient := message.NewRedisClient(os.Getenv("REDIS_ADDR"))
 	defer redisClient.Close()
 
+	db, err := sqlx.Open("postgres", os.Getenv("POSTGRES_URL"))
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
 	spreadsheetsAPI := adapters.NewSpreadsheetsAPIClient(apiClients)
 	receiptsService := adapters.NewReceiptsServiceClient(apiClients)
 
 	err = service.New(
+		db,
 		redisClient,
 		spreadsheetsAPI,
 		receiptsService,
