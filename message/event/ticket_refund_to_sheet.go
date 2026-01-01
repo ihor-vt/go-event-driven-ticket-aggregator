@@ -2,13 +2,14 @@ package event
 
 import (
 	"context"
-	"log/slog"
+
+	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
 
 	"tickets/entities"
 )
 
-func (h Handler) CancelTicket(ctx context.Context, event entities.TicketBookingCanceled) error {
-	slog.Info("Adding ticket refund to sheet")
+func (h Handler) TicketRefundToSheet(ctx context.Context, event *entities.TicketBookingCanceled) error {
+	log.FromContext(ctx).Info("Adding ticket refund to sheet")
 
 	return h.spreadsheetsAPI.AppendRow(
 		ctx,

@@ -1,48 +1,82 @@
-# Using Event Processor in the project
+# Update component tests
 
-Now it's time to use the Event Processor in your project.
+Did you remember to update the component tests?
+If not... it's time to do that now!
+
+{{tip}}
+
+Since the {{exerciseLink "component tests module" "08-component-tests" "01-component-tests"}} was optional,
+you may have skipped it.
+
+Would you like to go back to the component tests module and check it out?
+You can use `tdl tr jump` to jump to the module and complete it now.
+
+{{endtip}}
+
+
+We won't check whether your test work.
+It's up to you if you want to fix them.
+
+You can find instructions on how to run component tests locally in the {{exerciseLink "Running the Service in Tests" "08-component-tests" "03-project-running-service-in-tests"}} exercise.
+
+Since we have added a database support, now we need to also pass the database connection URL to run tests:
+
+```bash
+# Mac or Linux
+REDIS_ADDR=localhost:6379 POSTGRES_URL=postgres://user:password@localhost:5432/db?sslmode=disable go test ./tests/ -v
+
+# Windows PowerShell
+$env:REDIS_ADDR="localhost:6379"; $env:POSTGRES_URL="postgres://user:password@localhost:5432/db?sslmode=disable"; go test ./tests/ -v
+```
 
 ## Exercise
 
 Exercise path: ./project
 
-Update your project to use Event Processor instead of the raw Router.
+1. Implement stub of Files API and inject it into service.
+2. Test idempotency of the `sendTicketsStatus` function by sending the same request multiple times with the same idempotency key.
+3. Check that tickets were printed by calling Files API
+4. Pass idempotency key calls of POST `/tickets-status`
+5. Check if ticket was stored in the database
 
-Here are some tips on how to do this:
 
-1. Replace the Router handlers with an EventProcessor and EventHandlers.
-2. **Remember to create a new subscriber instance `SubscriberConstructor`** so each handler will use a separate subscriber. 
-   Like you did in the {{exerciseLink "the previous exercise" "09-cqrs-events" "06-cqrs-with-consumer-groups"}}.
-   If you don't, your message will be processed by only one handler.
+If you want, you can spend some time on checking the idempotency of some scenarios that are not possible to test at the repository level, 
+such as issuing receipts. It's critical to make sure that receipts are issued only once for each ticket.
+We don't want to mess with the financial team, do we?
 
-You should not do any JSON unmarshaling yourself. Just pass `JSONMarshaler` to the EventProcessor.
 
-After these changes, you should have much less boilerplate code in the project.
-You can also be sure that all marshaling and topic topology is consistent across the project.
+{{hints}}
 
-{{tip}}
+{{hint 1}}
 
-Do you remember how, in {{exerciseLink "the errors module" "07-errors" "03-project-malformed-messages"}}, we ignored malformed messages with the wrong message type?
-We no longer use this metadata, so if this check is still in your code, it will cause all messages to be ignored.
-Make sure that you don't have code like this in your project:
+This is how example implementation function that checks if ticket was stored in the repository looks like:
 
 ```go
-if msg.Metadata.Get("type") != "booking.created" {
-	slog.Error("Invalid message type")
-	return nil
+func assertTicketStoredInRepository(t *testing.T, db *sqlx.DB, ticket ticketsHttp.TicketStatusRequest) {
+	ticketsRepo := dbAdapters.NewTicketsRepository(db)
+
+	assert.Eventually(
+		t,
+		func() bool {
+			tickets, err := ticketsRepo.FindAll(context.Background())
+			if err != nil {
+				return false
+			}
+
+			for _, t := range tickets {
+				if t.TicketID == ticket.TicketID {
+					return true
+				}
+			}
+
+			return false
+		},
+		10*time.Second,
+		100*time.Millisecond,
+	)
 }
 ```
 
-{{endtip}}
+{{endhint}}
 
-{{tip}}
-
-If your service doesn't work as expected, double-check that all components use the correct topics.
-Logs should be useful for debugging.
-You may want to increase the log level to `debug` or `trace` to see more.   
-
-```go
-log.Init(watermill.LevelTrace)
-```
-
-{{endtip}}
+{{endhints}}
