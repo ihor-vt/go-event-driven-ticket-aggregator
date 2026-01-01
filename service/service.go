@@ -7,6 +7,7 @@ import (
 	stdHTTP "net/http"
 
 	"github.com/ThreeDotsLabs/watermill"
+	"github.com/ThreeDotsLabs/watermill/components/cqrs"
 	watermillMessage "github.com/ThreeDotsLabs/watermill/message"
 	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
@@ -32,6 +33,26 @@ func New(
 	var redisPublisher watermillMessage.Publisher
 	redisPublisher = message.NewRedisPublisher(redisClient, watermillLogger)
 
+	redisPublisher = message.CorrelationPublisherDecorator{
+		Publisher: redisPublisher,
+	}
+
+	eventBus, err := cqrs.NewEventBusWithConfig(
+		redisPublisher,
+		cqrs.EventBusConfig{
+			GeneratePublishTopic: func(params cqrs.GenerateEventPublishTopicParams) (string, error) {
+				return params.EventName, nil
+			},
+			Marshaler: cqrs.JSONMarshaler{
+				GenerateName: cqrs.StructName,
+			},
+			Logger: watermillLogger,
+		},
+	)
+	if err != nil {
+		panic(err)
+	}
+
 	watermillRouter := message.NewWatermillRouter(
 		receiptsService,
 		spreadsheetsAPI,
@@ -40,7 +61,7 @@ func New(
 	)
 
 	echoRouter := ticketsHttp.NewHttpRouter(
-		redisPublisher,
+		eventBus,
 	)
 
 	return Service{
