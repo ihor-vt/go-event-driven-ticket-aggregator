@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 	"errors"
-	"log/slog"
 	stdHTTP "net/http"
 
+	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
 	"github.com/ThreeDotsLabs/watermill"
 	watermillMessage "github.com/ThreeDotsLabs/watermill/message"
 	"github.com/labstack/echo/v4"
@@ -27,10 +27,11 @@ func New(
 	spreadsheetsAPI event.SpreadsheetsAPI,
 	receiptsService event.ReceiptsService,
 ) Service {
-	watermillLogger := watermill.NewSlogLogger(slog.Default())
+	watermillLogger := watermill.NewSlogLogger(log.FromContext(context.Background()))
 
-	var redisPublisher watermillMessage.Publisher
-	redisPublisher = message.NewRedisPublisher(redisClient, watermillLogger)
+	redisPublisher := message.NewRedisPublisher(redisClient, watermillLogger)
+
+	eventBus := event.NewBus(redisPublisher)
 
 	watermillRouter := message.NewWatermillRouter(
 		receiptsService,
@@ -40,7 +41,7 @@ func New(
 	)
 
 	echoRouter := ticketsHttp.NewHttpRouter(
-		redisPublisher,
+		eventBus,
 	)
 
 	return Service{
