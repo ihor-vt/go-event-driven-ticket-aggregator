@@ -5,5 +5,5 @@ import (
 )
 
 type Handler struct {
-	eventBus cqrs.EventBus
+	eventBus *cqrs.EventBus
 }

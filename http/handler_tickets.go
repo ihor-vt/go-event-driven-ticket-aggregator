@@ -37,17 +37,8 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 			}
 
 			if err := h.eventBus.Publish(c.Request().Context(), event); err != nil {
-				return fmt.Errorf("publishing TicketBookingConfirmed event: %w", err)
+				return fmt.Errorf("failed to publish TicketBookingConfirmed event: %w", err)
 			}
-
-			// msg := message.NewMessage(watermill.NewUUID(), payload)
-			// msg.Metadata.Set("correlation_id", c.Request().Header.Get("Correlation-ID"))
-			// msg.Metadata.Set("type", "TicketBookingConfirmed")
-
-			// err = h.publisher.Publish("TicketBookingConfirmed", msg)
-			// if err != nil {
-			// 	return err
-			// }
 		} else if ticket.Status == "canceled" {
 			event := entities.TicketBookingCanceled{
 				Header:        entities.NewMessageHeader(),
@@ -57,17 +48,8 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 			}
 
 			if err := h.eventBus.Publish(c.Request().Context(), event); err != nil {
-				return fmt.Errorf("publishing TicketBookingCanceled event: %w", err)
+				return fmt.Errorf("failed to publish TicketBookingCanceled event: %w", err)
 			}
-
-			// msg := message.NewMessage(watermill.NewUUID(), payload)
-			// msg.Metadata.Set("correlation_id", c.Request().Header.Get("Correlation-ID"))
-			// msg.Metadata.Set("type", "TicketBookingCanceled")
-
-			// err = h.publisher.Publish("TicketBookingCanceled", msg)
-			// if err != nil {
-			// 	return err
-			// }
 		} else {
 			return fmt.Errorf("unknown ticket status: %s", ticket.Status)
 		}

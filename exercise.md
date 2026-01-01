@@ -1,37 +1,48 @@
-# Using Event Bus in the project
+# Using Event Processor in the project
 
-You should now understand how to use the Event Bus and Event Processor in your project.
-It's time to apply them! Let's begin with the Event Bus.
+Now it's time to use the Event Processor in your project.
 
 ## Exercise
 
 Exercise path: ./project
 
-1. Update your project to use Event Bus instead of Publisher.
+Update your project to use Event Processor instead of the raw Router.
 
 Here are some tips on how to do this:
 
-* Publish messages using the EventBus, not the Publisher directly.
-* You should not do any JSON marshaling yourself. Just use the `JSONMarshaler` from Watermill in the EventBus config.
-* Similarly, you don't need to create Watermill's `*message.Message` manually to publish it. Just pass the event struct to EventBus's `Publish`.
+1. Replace the Router handlers with an EventProcessor and EventHandlers.
+2. **Remember to create a new subscriber instance `SubscriberConstructor`** so each handler will use a separate subscriber. 
+   Like you did in the {{exerciseLink "the previous exercise" "09-cqrs-events" "06-cqrs-with-consumer-groups"}}.
+   If you don't, your message will be processed by only one handler.
 
-Don't forget to use the JSON marshaler with the custom `GenerateName` option:
+You should not do any JSON unmarshaling yourself. Just pass `JSONMarshaler` to the EventProcessor.
+
+After these changes, you should have much less boilerplate code in the project.
+You can also be sure that all marshaling and topic topology is consistent across the project.
+
+{{tip}}
+
+Do you remember how, in {{exerciseLink "the errors module" "07-errors" "03-project-malformed-messages"}}, we ignored malformed messages with the wrong message type?
+We no longer use this metadata, so if this check is still in your code, it will cause all messages to be ignored.
+Make sure that you don't have code like this in your project:
 
 ```go
-var marshaler = cqrs.JSONMarshaler{
-	GenerateName: cqrs.StructName,
+if msg.Metadata.Get("type") != "booking.created" {
+	slog.Error("Invalid message type")
+	return nil
 }
 ```
 
-2. Add the Correlation ID decorator to the publisher.
-   Without it, you will have a hard time debugging your application if something goes wrong.
+{{endtip}}
 
-You can use the decorator you implemented yourself, or use the `log.CorrelationPublisherDecorator` from
-[`github.com/ThreeDotsLabs/go-event-driven/v2/common`](https://github.com/ThreeDotsLabs/go-event-driven/tree/main/common/log).
+{{tip}}
 
-The decorator uses middleware from the [`github.com/ThreeDotsLabs/go-event-driven/v2/common/middleware`](https://github.com/ThreeDotsLabs/go-event-driven/blob/main/common/http/middlewares.go#L55) package.
-This middleware extracts the correlation ID from the HTTP header and adds it to the context.
-The decorator can then extract it using `log.CorrelationIDFromContext`.
+If your service doesn't work as expected, double-check that all components use the correct topics.
+Logs should be useful for debugging.
+You may want to increase the log level to `debug` or `trace` to see more.   
 
-After these changes, you should have much less boilerplate code in your project.
-It'll also be much easier to add new events and handlers in the future.
+```go
+log.Init(watermill.LevelTrace)
+```
+
+{{endtip}}
