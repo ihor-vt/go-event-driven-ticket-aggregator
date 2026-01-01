@@ -1,45 +1,82 @@
-# Printing Tickets - emit event
+# Update component tests
 
-{{background}}
+Did you remember to update the component tests?
+If not... it's time to do that now!
 
-One team in our company wants to integrate with the printing system to automate the printing of tickets.
-They want to integrate with our system by subscribing to the `TicketPrinted` event.
+{{tip}}
 
-They need information about the ticket ID and file name.
+Since the {{exerciseLink "component tests module" "08-component-tests" "01-component-tests"}} was optional,
+you may have skipped it.
 
-{{endbackground}}
+Would you like to go back to the component tests module and check it out?
+You can use `tdl tr jump` to jump to the module and complete it now.
+
+{{endtip}}
+
+
+We won't check whether your test work.
+It's up to you if you want to fix them.
+
+You can find instructions on how to run component tests locally in the {{exerciseLink "Running the Service in Tests" "08-component-tests" "03-project-running-service-in-tests"}} exercise.
+
+Since we have added a database support, now we need to also pass the database connection URL to run tests:
+
+```bash
+# Mac or Linux
+REDIS_ADDR=localhost:6379 POSTGRES_URL=postgres://user:password@localhost:5432/db?sslmode=disable go test ./tests/ -v
+
+# Windows PowerShell
+$env:REDIS_ADDR="localhost:6379"; $env:POSTGRES_URL="postgres://user:password@localhost:5432/db?sslmode=disable"; go test ./tests/ -v
+```
 
 ## Exercise
 
 Exercise path: ./project
 
-Use the Event Bus to emit a `TicketPrinted` event after the ticket is printed.
-You need to inject the Event Bus to your handler.
+1. Implement stub of Files API and inject it into service.
+2. Test idempotency of the `sendTicketsStatus` function by sending the same request multiple times with the same idempotency key.
+3. Check that tickets were printed by calling Files API
+4. Pass idempotency key calls of POST `/tickets-status`
+5. Check if ticket was stored in the database
 
-The emitted event should have the following format:
+
+If you want, you can spend some time on checking the idempotency of some scenarios that are not possible to test at the repository level, 
+such as issuing receipts. It's critical to make sure that receipts are issued only once for each ticket.
+We don't want to mess with the financial team, do we?
+
+
+{{hints}}
+
+{{hint 1}}
+
+This is how example implementation function that checks if ticket was stored in the repository looks like:
 
 ```go
-type TicketPrinted struct {
-	Header MessageHeader `json:"header"`
+func assertTicketStoredInRepository(t *testing.T, db *sqlx.DB, ticket ticketsHttp.TicketStatusRequest) {
+	ticketsRepo := dbAdapters.NewTicketsRepository(db)
 
-	TicketID string `json:"ticket_id"`
-	FileName string `json:"file_name"`
+	assert.Eventually(
+		t,
+		func() bool {
+			tickets, err := ticketsRepo.FindAll(context.Background())
+			if err != nil {
+				return false
+			}
+
+			for _, t := range tickets {
+				if t.TicketID == ticket.TicketID {
+					return true
+				}
+			}
+
+			return false
+		},
+		10*time.Second,
+		100*time.Millisecond,
+	)
 }
 ```
 
-{{tip}}
+{{endhint}}
 
-If you feel tempted to add the entire ticket model to the event, don't do it by default!
-
-Remember that events become a contract between systems.
-If you add an entire ticket model to the event, you will need to always keep adding this data to the event.
-
-It's especially painful if you are refactoring in the future, and you want to split services or modules to smaller ones.
-You may no longer have access to all the data that you emitted in the event in the past.
-
-As an alternative, you can deprecate the old event and introduce a new one. 
-However, it's always painful (as it may require a cross-team initiative).
-
-[YAGNI!](https://en.wikipedia.org/wiki/You_aren%27t_gonna_need_it)
-
-{{endtip}}
+{{endhints}}

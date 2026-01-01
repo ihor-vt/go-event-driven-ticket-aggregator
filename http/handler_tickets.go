@@ -26,15 +26,20 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 	if err != nil {
 		return err
 	}
+	idempotencyKey := c.Request().Header.Get("Idempotency-Key")
+	if idempotencyKey == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "missing Idempotency-Key header")
+	}
 
 	for _, ticket := range request.Tickets {
 		if ticket.Status == "confirmed" {
 			event := entities.TicketBookingConfirmed{
 				Header: entities.NewMessageHeader(),
 
-				TicketID:      ticket.TicketID,
-				Price:         ticket.Price,
-				CustomerEmail: ticket.CustomerEmail,
+				TicketID:       ticket.TicketID,
+				Price:          ticket.Price,
+				CustomerEmail:  ticket.CustomerEmail,
+				IdempotencyKey: idempotencyKey + "|" + ticket.TicketID,
 			}
 
 			if err := h.eventBus.Publish(c.Request().Context(), event); err != nil {
