@@ -56,6 +56,7 @@ func New(
 
 	echoRouter := ticketsHttp.NewHttpRouter(
 		eventBus,
+		ticketsRepo,
 	)
 
 	return Service{

@@ -30,10 +30,11 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 	for _, ticket := range request.Tickets {
 		if ticket.Status == "confirmed" {
 			event := entities.TicketBookingConfirmed{
-				Header:        entities.NewMessageHeader(),
+				Header: entities.NewMessageHeader(),
+
 				TicketID:      ticket.TicketID,
-				CustomerEmail: ticket.CustomerEmail,
 				Price:         ticket.Price,
+				CustomerEmail: ticket.CustomerEmail,
 			}
 
 			if err := h.eventBus.Publish(c.Request().Context(), event); err != nil {
@@ -56,4 +57,13 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 	}
 
 	return c.NoContent(http.StatusOK)
+}
+
+func (h Handler) GetTickets(c echo.Context) error {
+	tickets, err := h.ticketsRepo.FindAll(c.Request().Context())
+	if err != nil {
+		return fmt.Errorf("failed to find tickets: %w", err)
+	}
+
+	return c.JSON(http.StatusOK, tickets)
 }

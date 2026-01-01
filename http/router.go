@@ -8,7 +8,10 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func NewHttpRouter(eventBus *cqrs.EventBus) *echo.Echo {
+func NewHttpRouter(
+	eventBus *cqrs.EventBus,
+	ticketsRepository TicketsRepository,
+) *echo.Echo {
 	e := libHttp.NewEcho()
 
 	e.GET("/health", func(c echo.Context) error {
@@ -16,10 +19,13 @@ func NewHttpRouter(eventBus *cqrs.EventBus) *echo.Echo {
 	})
 
 	handler := Handler{
-		eventBus: eventBus,
+		eventBus:    eventBus,
+		ticketsRepo: ticketsRepository,
 	}
 
 	e.POST("/tickets-status", handler.PostTicketsStatus)
+
+	e.GET("/tickets", handler.GetTickets)
 
 	return e
 }
