@@ -1,82 +1,76 @@
-# Update component tests
+# Calling Dead Nation
 
-Did you remember to update the component tests?
-If not... it's time to do that now!
+Remember that our {{exerciseLink "goal" "11-outbox" "01-project-replacing-dead-nation"}} is to migrate from the Dead Nation API to our own implementation.
+To do that, we'll capture and forward requests to their API.
 
-{{tip}}
+Previously, you exposed an endpoint that mimics the Dead Nation API.
+Now you need to call the Dead Nation's endpoint.
 
-Since the {{exerciseLink "component tests module" "08-component-tests" "01-component-tests"}} was optional,
-you may have skipped it.
-
-Would you like to go back to the component tests module and check it out?
-You can use `tdl tr jump` to jump to the module and complete it now.
-
-{{endtip}}
-
-
-We won't check whether your test work.
-It's up to you if you want to fix them.
-
-You can find instructions on how to run component tests locally in the {{exerciseLink "Running the Service in Tests" "08-component-tests" "03-project-running-service-in-tests"}} exercise.
-
-Since we have added a database support, now we need to also pass the database connection URL to run tests:
-
-```bash
-# Mac or Linux
-REDIS_ADDR=localhost:6379 POSTGRES_URL=postgres://user:password@localhost:5432/db?sslmode=disable go test ./tests/ -v
-
-# Windows PowerShell
-$env:REDIS_ADDR="localhost:6379"; $env:POSTGRES_URL="postgres://user:password@localhost:5432/db?sslmode=disable"; go test ./tests/ -v
-```
+We'll do it asynchronously, so we don't need to worry about their API being down or slow.
+We'll use the `BookingMade` event that you emitted in the {{exerciseLink "previous exercise" "11-outbox" "10-project-emit-place-booked"}}.
 
 ## Exercise
 
 Exercise path: ./project
 
-1. Implement stub of Files API and inject it into service.
-2. Test idempotency of the `sendTicketsStatus` function by sending the same request multiple times with the same idempotency key.
-3. Check that tickets were printed by calling Files API
-4. Pass idempotency key calls of POST `/tickets-status`
-5. Check if ticket was stored in the database
+1. Add a new event handler for the `BookingMade` event.
 
+2. Map our `ShowID` to Dead Nation's `EventId`. We are calling the Dead Nation API, so we need to call it with their event ID, not our internal one. 
+You can get Dead Nation's `EventId` from the database (it's stored in the `POST /shows` call, see {{exerciseLink "the previous exercise" "11-outbox" "02-project-store-show"}}).
 
-If you want, you can spend some time on checking the idempotency of some scenarios that are not possible to test at the repository level, 
-such as issuing receipts. It's critical to make sure that receipts are issued only once for each ticket.
-We don't want to mess with the financial team, do we?
+This is intentionally a different name: EventID is a term used by Dead Nation, while we prefer the name `ShowID` so it's not confused with our internal ID.
 
-
-{{hints}}
-
-{{hint 1}}
-
-This is how example implementation function that checks if ticket was stored in the repository looks like:
+You may need a new repository method to get the Show by its ID.
 
 ```go
-func assertTicketStoredInRepository(t *testing.T, db *sqlx.DB, ticket ticketsHttp.TicketStatusRequest) {
-	ticketsRepo := dbAdapters.NewTicketsRepository(db)
+func (s ShowsRepository) ShowByID(ctx context.Context, showID string) (entities.Show, error) {
+	var show entities.Show
+	err := s.db.GetContext(ctx, &show, `SELECT * FROM shows WHERE show_id = $1`, showID)
+	if err != nil {
+		return entities.Show{}, err
+	}
 
-	assert.Eventually(
-		t,
-		func() bool {
-			tickets, err := ticketsRepo.FindAll(context.Background())
-			if err != nil {
-				return false
-			}
-
-			for _, t := range tickets {
-				if t.TicketID == ticket.TicketID {
-					return true
-				}
-			}
-
-			return false
-		},
-		10*time.Second,
-		100*time.Millisecond,
-	)
+	return show, nil
 }
 ```
 
-{{endhint}}
+3. In the `BookingMade` handler, call the Dead Nation API to book a ticket. Remember to use `EventId`, not our internal `ShowID`.
 
-{{endhints}}
+There's a ready-to-use Dead Nation client in [the common library](https://github.com/ThreeDotsLabs/go-event-driven/blob/main/common/clients/clients.go).
+
+{{tip}}
+
+Remember, these clients are initialized in your `main` function. Look for this line in `main.go`:
+
+```go
+apiClients, err := clients.NewClients(
+```
+
+{{endtip}}
+
+```go
+resp, err := clients.DeadNation.PostTicketBookingWithResponse(
+    ctx,
+    dead_nation.PostTicketBookingRequest{
+        BookingId:       booking.BookingID,
+        EventId:         booking.DeadNationEventID,
+        NumberOfTickets: booking.NumberOfTickets,
+        CustomerAddress: booking.CustomerEmail,
+    },
+)
+```
+
+As it usually happens, the names of the external API don't match 1:1 with our names.
+For example, `CustomerAddress` is `CustomerEmail` in our codebase.
+
+
+{{tip}}
+
+Adapters (like repositories or clients) are usually good spots to make the translation from external to internal language.
+Like in this case, the Dead Nation API uses `CustomerAddress`, but we use `CustomerEmail`.
+
+It allows us to keep the language inside our application consistent and free of external influences.
+
+{{endtip}}
+
+If everything goes fine, Dead Nation should call your `POST /ticket-status` endpoint.

@@ -19,6 +19,7 @@ import (
 	ticketsHttp "tickets/http"
 	"tickets/message"
 	"tickets/message/event"
+	"tickets/message/outbox"
 )
 
 type Service struct {
@@ -35,6 +36,8 @@ func New(
 	filesAPI event.FilesAPI,
 ) Service {
 	ticketsRepo := db.NewTicketsRepository(dbConn)
+	showsRepo := db.NewShowsRepository(dbConn)
+	bookingsRepository := db.NewBookingRepository(dbConn)
 
 	watermillLogger := watermill.NewSlogLogger(log.FromContext(context.Background()))
 
@@ -49,9 +52,13 @@ func New(
 		ticketsRepo,
 		eventBus,
 	)
+
+	postgresSubscriber := outbox.NewPostgresSubscriber(dbConn.DB, watermillLogger)
 	eventProcessorConfig := event.NewProcessorConfig(redisClient, watermillLogger)
 
 	watermillRouter := message.NewWatermillRouter(
+		postgresSubscriber,
+		redisPublisher,
 		eventProcessorConfig,
 		eventsHandler,
 		watermillLogger,
@@ -60,6 +67,8 @@ func New(
 	echoRouter := ticketsHttp.NewHttpRouter(
 		eventBus,
 		ticketsRepo,
+		showsRepo,
+		bookingsRepository,
 	)
 
 	return Service{

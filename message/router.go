@@ -6,12 +6,21 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 
 	"tickets/message/event"
+	"tickets/message/outbox"
 )
 
-func NewWatermillRouter(eventProcessorConfig cqrs.EventProcessorConfig, eventHandler event.Handler, watermillLogger watermill.LoggerAdapter) *message.Router {
+func NewWatermillRouter(
+	postgresSubscriber message.Subscriber,
+	publisher message.Publisher,
+	eventProcessorConfig cqrs.EventProcessorConfig,
+	eventHandler event.Handler,
+	watermillLogger watermill.LoggerAdapter,
+) *message.Router {
 	router := message.NewDefaultRouter(watermillLogger)
 
 	useMiddlewares(router, watermillLogger)
+
+	outbox.AddForwarderHandler(postgresSubscriber, publisher, router, watermillLogger)
 
 	eventProcessor, err := cqrs.NewEventProcessorWithConfig(router, eventProcessorConfig)
 	if err != nil {
