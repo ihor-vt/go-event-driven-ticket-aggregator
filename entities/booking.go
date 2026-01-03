@@ -6,3 +6,12 @@ type Booking struct {
 	NumberOfTickets int    `json:"number_of_tickets" db:"number_of_tickets"`
 	CustomerEmail   string `json:"customer_email" db:"customer_email"`
 }
+
+type BookingMade struct {
+	Header MessageHeader `json:"header"`
+
+	NumberOfTickets int    `json:"number_of_tickets"`
+	BookingID       string `json:"booking_id"`
+	CustomerEmail   string `json:"customer_email"`
+	ShowID          string `json:"show_id"`
+}
