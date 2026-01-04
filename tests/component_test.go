@@ -39,8 +39,11 @@ func TestComponent(t *testing.T) {
 
 	deadNationAPI := &adapters.DeadNationStub{}
 	spreadsheetsAPI := &adapters.SpreadsheetsAPIStub{}
-	receiptsService := &adapters.ReceiptsServiceStub{IssuedReceipts: map[string]entities.IssueReceiptRequest{}}
+	receiptsService := &adapters.ReceiptsServiceStub{
+		IssuedReceipts: map[string]entities.IssueReceiptRequest{},
+	}
 	filesAPI := &adapters.FilesApiStub{}
+	paymentsService := &adapters.PaymentsServiceStub{}
 
 	go func() {
 		svc := service.New(
@@ -50,6 +53,7 @@ func TestComponent(t *testing.T) {
 			spreadsheetsAPI,
 			receiptsService,
 			filesAPI,
+			paymentsService,
 		)
 		assert.NoError(t, svc.Run(ctx))
 	}()
@@ -102,7 +106,11 @@ func TestComponent(t *testing.T) {
 	)
 }
 
-func assertTicketStoredInRepository(t *testing.T, db *sqlx.DB, ticket ticketsHttp.TicketStatusRequest) {
+func assertTicketStoredInRepository(
+	t *testing.T,
+	db *sqlx.DB,
+	ticket ticketsHttp.TicketStatusRequest,
+) {
 	ticketsRepo := dbAdapters.NewTicketsRepository(db)
 
 	assert.Eventually(
@@ -126,7 +134,12 @@ func assertTicketStoredInRepository(t *testing.T, db *sqlx.DB, ticket ticketsHtt
 	)
 }
 
-func assertRowToSheetAdded(t *testing.T, spreadsheetsAPI *adapters.SpreadsheetsAPIStub, ticket ticketsHttp.TicketStatusRequest, sheetName string) bool {
+func assertRowToSheetAdded(
+	t *testing.T,
+	spreadsheetsAPI *adapters.SpreadsheetsAPIStub,
+	ticket ticketsHttp.TicketStatusRequest,
+	sheetName string,
+) bool {
 	t.Helper()
 
 	return assert.EventuallyWithT(
@@ -169,11 +182,18 @@ func assertRowToSheetAdded(t *testing.T, spreadsheetsAPI *adapters.SpreadsheetsA
 	)
 }
 
-func assertTicketPrinted(t *testing.T, filesAPI *adapters.FilesApiStub, ticket ticketsHttp.TicketStatusRequest) bool {
+func assertTicketPrinted(
+	t *testing.T,
+	filesAPI *adapters.FilesApiStub,
+	ticket ticketsHttp.TicketStatusRequest,
+) bool {
 	return assert.EventuallyWithT(
 		t,
 		func(t *assert.CollectT) {
-			content, err := filesAPI.DownloadFile(context.Background(), ticket.TicketID+"-ticket.html")
+			content, err := filesAPI.DownloadFile(
+				context.Background(),
+				ticket.TicketID+"-ticket.html",
+			)
 			if !assert.NoError(t, err) {
 				return
 			}
@@ -189,7 +209,11 @@ func assertTicketPrinted(t *testing.T, filesAPI *adapters.FilesApiStub, ticket t
 	)
 }
 
-func assertReceiptForTicketIssued(t *testing.T, receiptsService *adapters.ReceiptsServiceStub, ticket ticketsHttp.TicketStatusRequest) {
+func assertReceiptForTicketIssued(
+	t *testing.T,
+	receiptsService *adapters.ReceiptsServiceStub,
+	ticket ticketsHttp.TicketStatusRequest,
+) {
 	t.Helper()
 
 	parentT := t
@@ -206,9 +230,12 @@ func assertReceiptForTicketIssued(t *testing.T, receiptsService *adapters.Receip
 		100*time.Millisecond,
 	)
 
-	receipt, ok := lo.Find(lo.Values(receiptsService.IssuedReceipts), func(r entities.IssueReceiptRequest) bool {
-		return r.TicketID == ticket.TicketID
-	})
+	receipt, ok := lo.Find(
+		lo.Values(receiptsService.IssuedReceipts),
+		func(r entities.IssueReceiptRequest) bool {
+			return r.TicketID == ticket.TicketID
+		},
+	)
 	require.Truef(t, ok, "receipt for ticket %s not found", ticket.TicketID)
 
 	assert.Equal(t, ticket.TicketID, receipt.TicketID)
@@ -252,7 +279,13 @@ func waitForHttpServer(t *testing.T) {
 			}
 			defer resp.Body.Close()
 
-			if assert.Less(t, resp.StatusCode, 300, "API not ready, http status: %d", resp.StatusCode) {
+			if assert.Less(
+				t,
+				resp.StatusCode,
+				300,
+				"API not ready, http status: %d",
+				resp.StatusCode,
+			) {
 				return
 			}
 		},

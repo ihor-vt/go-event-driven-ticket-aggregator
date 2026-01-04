@@ -10,6 +10,7 @@ import (
 
 type Handler struct {
 	eventBus           *cqrs.EventBus
+	commandBus         *cqrs.CommandBus
 	ticketsRepo        TicketsRepository
 	showsRepository    ShowsRepository
 	bookingsRepository BookingsRepository
