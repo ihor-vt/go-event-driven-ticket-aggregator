@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"tickets/entities"
@@ -35,7 +36,9 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 	for _, ticket := range request.Tickets {
 		if ticket.Status == "confirmed" {
 			event := entities.TicketBookingConfirmed{
-				Header: entities.NewMessageHeaderWithIdempotencyKey(idempotencyKey + ticket.TicketID),
+				Header: entities.NewMessageHeaderWithIdempotencyKey(
+					idempotencyKey + ticket.TicketID,
+				),
 
 				TicketID:      ticket.TicketID,
 				Price:         ticket.Price,
@@ -62,6 +65,21 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 	}
 
 	return c.NoContent(http.StatusOK)
+}
+
+func (h Handler) PutTicketRefund(c echo.Context) error {
+	ticketID := c.Param("ticket_id")
+
+	cmd := entities.RefundTicket{
+		Header:   entities.NewMessageHeaderWithIdempotencyKey(uuid.NewString()),
+		TicketID: ticketID,
+	}
+
+	if err := h.commandBus.Send(c.Request().Context(), cmd); err != nil {
+		return fmt.Errorf("failed to send RefundTicket command: %w", err)
+	}
+
+	return c.NoContent(http.StatusAccepted)
 }
 
 func (h Handler) GetTickets(c echo.Context) error {

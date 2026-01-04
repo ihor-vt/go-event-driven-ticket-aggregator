@@ -4,15 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"tickets/entities"
 
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients"
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients/receipts"
-)
 
-type SpreadsheetsAPI interface {
-	AppendRow(ctx context.Context, sheetName string, row []string) error
-}
+	"tickets/entities"
+)
 
 type ReceiptsServiceClient struct {
 	// we are not mocking this client: it's pointless to use interface here
@@ -27,14 +24,18 @@ func NewReceiptsServiceClient(clients *clients.Clients) *ReceiptsServiceClient {
 	return &ReceiptsServiceClient{clients: clients}
 }
 
-func (c ReceiptsServiceClient) IssueReceipt(ctx context.Context, request entities.IssueReceiptRequest) error {
+func (c ReceiptsServiceClient) IssueReceipt(
+	ctx context.Context,
+	request entities.IssueReceiptRequest,
+) error {
 	resp, err := c.clients.Receipts.PutReceiptsWithResponse(ctx, receipts.CreateReceipt{
-		TicketId: request.TicketID,
+		IdempotencyKey: &request.IdempotencyKey,
+
 		Price: receipts.Money{
 			MoneyAmount:   request.Price.Amount,
 			MoneyCurrency: request.Price.Currency,
 		},
-		IdempotencyKey: &request.IdempotencyKey,
+		TicketId: request.TicketID,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to post receipt: %w", err)
@@ -48,6 +49,32 @@ func (c ReceiptsServiceClient) IssueReceipt(ctx context.Context, request entitie
 		// receipt was created
 		return nil
 	default:
-		return fmt.Errorf("unexpected status code for POST receipts-api/receipts: %d", resp.StatusCode())
+		return fmt.Errorf(
+			"unexpected status code for POST receipts-api/receipts: %d",
+			resp.StatusCode(),
+		)
 	}
+}
+
+func (c ReceiptsServiceClient) VoidReceipt(
+	ctx context.Context,
+	request entities.VoidReceipt,
+) error {
+	resp, err := c.clients.Receipts.PutVoidReceiptWithResponse(ctx, receipts.VoidReceiptRequest{
+		Reason:       request.Reason,
+		TicketId:     request.TicketID,
+		IdempotentId: &request.IdempotencyKey,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to post void receipt: %w", err)
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf(
+			"unexpected status code for POST receipts-api/receipts/void: %d",
+			resp.StatusCode(),
+		)
+	}
+
+	return nil
 }
