@@ -43,6 +43,7 @@ func main() {
 	redisClient := message.NewRedisClient(os.Getenv("REDIS_ADDR"))
 	defer redisClient.Close()
 
+	deadNationAPI := adapters.NewDeadNationClient(apiClients)
 	spreadsheetsAPI := adapters.NewSpreadsheetsAPIClient(apiClients)
 	receiptsService := adapters.NewReceiptsServiceClient(apiClients)
 	filesAPI := adapters.NewFilesApiClient(apiClients)
@@ -50,6 +51,7 @@ func main() {
 	err = service.New(
 		db,
 		redisClient,
+		deadNationAPI,
 		spreadsheetsAPI,
 		receiptsService,
 		filesAPI,

@@ -31,13 +31,14 @@ type Service struct {
 func New(
 	dbConn *sqlx.DB,
 	redisClient *redis.Client,
+	deadNationAPI event.DeadNationAPI,
 	spreadsheetsAPI event.SpreadsheetsAPI,
 	receiptsService event.ReceiptsService,
 	filesAPI event.FilesAPI,
 ) Service {
 	ticketsRepo := db.NewTicketsRepository(dbConn)
 	showsRepo := db.NewShowsRepository(dbConn)
-	bookingsRepository := db.NewBookingRepository(dbConn)
+	bookingsRepository := db.NewBookingsRepository(dbConn)
 
 	watermillLogger := watermill.NewSlogLogger(log.FromContext(context.Background()))
 
@@ -46,10 +47,12 @@ func New(
 	eventBus := event.NewBus(redisPublisher)
 
 	eventsHandler := event.NewHandler(
+		deadNationAPI,
 		spreadsheetsAPI,
 		receiptsService,
 		filesAPI,
 		ticketsRepo,
+		showsRepo,
 		eventBus,
 	)
 

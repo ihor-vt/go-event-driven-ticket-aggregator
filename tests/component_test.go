@@ -37,6 +37,7 @@ func TestComponent(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	deadNationAPI := &adapters.DeadNationStub{}
 	spreadsheetsAPI := &adapters.SpreadsheetsAPIStub{}
 	receiptsService := &adapters.ReceiptsServiceStub{IssuedReceipts: map[string]entities.IssueReceiptRequest{}}
 	filesAPI := &adapters.FilesApiStub{}
@@ -45,6 +46,7 @@ func TestComponent(t *testing.T) {
 		svc := service.New(
 			db,
 			redisClient,
+			deadNationAPI,
 			spreadsheetsAPI,
 			receiptsService,
 			filesAPI,

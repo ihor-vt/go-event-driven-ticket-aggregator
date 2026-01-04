@@ -1,37 +1,56 @@
 package http
 
 import (
+	"context"
+	"fmt"
 	"net/http"
-	"tickets/entities"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+
+	"tickets/entities"
 )
 
-type BookTicketsRequest struct {
-	ShowID          uuid.UUID `json:"show_id"`
-	NumberOfTickets int       `json:"number_of_tickets"`
+type BookingsRepository interface {
+	AddBooking(ctx context.Context, booking entities.Booking) error
+}
+
+type BookTicketRequest struct {
 	CustomerEmail   string    `json:"customer_email"`
+	NumberOfTickets int       `json:"number_of_tickets"`
+	ShowID          uuid.UUID `json:"show_id"`
+}
+
+type BookTicketResponse struct {
+	BookingID uuid.UUID `json:"booking_id"`
 }
 
 func (h Handler) PostBookTickets(c echo.Context) error {
-	var req BookTicketsRequest
+	req := BookTicketRequest{}
 	if err := c.Bind(&req); err != nil {
 		return err
 	}
 
-	bookingId := uuid.New()
-
-	if err := h.bookingRepo.AddBooking(c.Request().Context(), entities.Booking{
-		BookingID:       bookingId.String(),
-		ShowID:          req.ShowID.String(),
-		NumberOfTickets: req.NumberOfTickets,
-		CustomerEmail:   req.CustomerEmail,
-	}); err != nil {
-		return err
+	if req.NumberOfTickets < 1 {
+		return echo.NewHTTPError(http.StatusBadRequest, "number of tickets must be greater than 0")
 	}
 
-	return c.JSON(http.StatusCreated, map[string]interface{}{
-		"booking_id": bookingId.String(),
+	bookingID := uuid.New()
+
+	err := h.bookingsRepository.AddBooking(c.Request().Context(), entities.Booking{
+		BookingID:       bookingID,
+		CustomerEmail:   req.CustomerEmail,
+		NumberOfTickets: req.NumberOfTickets,
+		ShowID:          req.ShowID,
 	})
+	if err != nil {
+		return fmt.Errorf("failed to add booking: %w", err)
+	}
+
+	return c.JSON(
+		http.StatusCreated,
+		BookTicketResponse{
+			BookingID: bookingID,
+		},
+	)
 }
