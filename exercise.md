@@ -1,13 +1,28 @@
-# Project: Add Booking ID to TicketBookingConfirmed
+# Project: Publish Ticket Refunded Event
 
-We'll want to use `TicketBookingConfirmed` event for our read model.
-But it misses the `BookingID` field which we'll use as the primary ID for the read model.
-
-Thankfully, Dead Nation's API will pass through the `BookingID` field if we send it in the API request.
+One more event we miss is the `TicketRefunded` event.
+We'll use this data to update the read model when a ticket is refunded.
 
 ## Exercise
 
 Exercise path: ./project
 
-1. Extend the `TicketBookingConfirmed` event to include the `booking_id` field.
-2. Update the `POST /tickets-status` HTTP handler. Pass the `booking_id` field from the request's payload to the `TicketBookingConfirmed` event when publishing it.
+1. Introduce a new event: `TicketRefunded` containing `ticket_id`.
+
+2. Publish it while handling the `RefundTicket` command.
+
+{{hints}}
+{{hint 1}}
+
+This is how `TicketRefunded` event can look like:
+
+```go
+type TicketRefunded struct {
+	Header MessageHeader `json:"header"`
+
+	TicketID string `json:"ticket_id"`
+}
+```
+
+{{endhint}}
+{{endhints}}

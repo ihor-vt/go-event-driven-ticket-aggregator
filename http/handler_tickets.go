@@ -81,6 +81,13 @@ func (h Handler) PutTicketRefund(c echo.Context) error {
 		return fmt.Errorf("failed to send RefundTicket command: %w", err)
 	}
 
+	if err := h.eventBus.Publish(c.Request().Context(), entities.TicketRefunded{
+		Header:   entities.NewMessageHeaderWithIdempotencyKey(cmd.Header.IdempotencyKey),
+		TicketID: ticketID,
+	}); err != nil {
+		return fmt.Errorf("failed to publish TicketRefunded event: %w", err)
+	}
+
 	return c.NoContent(http.StatusAccepted)
 }
 
