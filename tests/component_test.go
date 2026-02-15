@@ -61,8 +61,9 @@ func TestComponent(t *testing.T) {
 	waitForHttpServer(t)
 
 	ticket := ticketsHttp.TicketStatusRequest{
-		TicketID: uuid.NewString(),
-		Status:   "confirmed",
+		TicketID:  uuid.NewString(),
+		BookingID: uuid.NewString(),
+		Status:    "confirmed",
 		Price: entities.Money{
 			Amount:   "50.30",
 			Currency: "GBP",

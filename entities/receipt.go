@@ -1,5 +1,7 @@
 package entities
 
+import "time"
+
 type VoidReceipt struct {
 	TicketID       string
 	Reason         string
@@ -11,4 +13,9 @@ type IssueReceiptRequest struct {
 	Price    Money  `json:"price"`
 
 	IdempotencyKey string `json:"idempotency_key"`
+}
+
+type IssueReceiptResponse struct {
+	ReceiptNumber string    `json:"receipt_number"`
+	IssuedAt      time.Time `json:"issued_at"`
 }

@@ -16,6 +16,7 @@ type TicketsStatusRequest struct {
 
 type TicketStatusRequest struct {
 	TicketID      string         `json:"ticket_id"`
+	BookingID     string         `json:"booking_id"`
 	Status        string         `json:"status"`
 	Price         entities.Money `json:"price"`
 	CustomerEmail string         `json:"customer_email"`
@@ -41,6 +42,7 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 				),
 
 				TicketID:      ticket.TicketID,
+				BookingID:     ticket.BookingID,
 				Price:         ticket.Price,
 				CustomerEmail: ticket.CustomerEmail,
 			}
