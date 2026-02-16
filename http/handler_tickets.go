@@ -16,6 +16,7 @@ type TicketsStatusRequest struct {
 
 type TicketStatusRequest struct {
 	TicketID      string         `json:"ticket_id"`
+	BookingID     string         `json:"booking_id"`
 	Status        string         `json:"status"`
 	Price         entities.Money `json:"price"`
 	CustomerEmail string         `json:"customer_email"`
@@ -41,6 +42,7 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 				),
 
 				TicketID:      ticket.TicketID,
+				BookingID:     ticket.BookingID,
 				Price:         ticket.Price,
 				CustomerEmail: ticket.CustomerEmail,
 			}
@@ -77,6 +79,13 @@ func (h Handler) PutTicketRefund(c echo.Context) error {
 
 	if err := h.commandBus.Send(c.Request().Context(), cmd); err != nil {
 		return fmt.Errorf("failed to send RefundTicket command: %w", err)
+	}
+
+	if err := h.eventBus.Publish(c.Request().Context(), entities.TicketRefunded{
+		Header:   entities.NewMessageHeaderWithIdempotencyKey(cmd.Header.IdempotencyKey),
+		TicketID: ticketID,
+	}); err != nil {
+		return fmt.Errorf("failed to publish TicketRefunded event: %w", err)
 	}
 
 	return c.NoContent(http.StatusAccepted)
