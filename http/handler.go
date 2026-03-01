@@ -26,6 +26,6 @@ type ShowsRepository interface {
 }
 
 type OpsBookingRepository interface {
-	AllBookings(ctx context.Context) ([]entities.OpsBooking, error)
+	AllBookings(ctx context.Context, receiptIssueDate *string) ([]entities.OpsBooking, error)
 	BookingReadModel(ctx context.Context, bookingID string) (entities.OpsBooking, error)
 }

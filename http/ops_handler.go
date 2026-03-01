@@ -8,7 +8,12 @@ import (
 )
 
 func (h Handler) GetOpsBookings(c echo.Context) error {
-	bookings, err := h.opsBookingRepo.AllBookings(c.Request().Context())
+	var receiptIssueDate *string
+	if date := c.QueryParam("receipt_issue_date"); date != "" {
+		receiptIssueDate = &date
+	}
+
+	bookings, err := h.opsBookingRepo.AllBookings(c.Request().Context(), receiptIssueDate)
 	if err != nil {
 		return fmt.Errorf("failed to get bookings: %w", err)
 	}
