@@ -15,6 +15,7 @@ func NewWatermillRouter(
 	publisher message.Publisher,
 	eventProcessorConfig cqrs.EventProcessorConfig,
 	eventHandler event.Handler,
+	opsBookingReadModel event.OpsBookingReadModel,
 	commandProcessorConfig cqrs.CommandProcessorConfig,
 	commandsHandler command.Handler,
 	watermillLogger watermill.LoggerAdapter,
@@ -58,6 +59,26 @@ func NewWatermillRouter(
 		cqrs.NewEventHandler(
 			"RemoveCanceledTicket",
 			eventHandler.RemoveCanceledTicket,
+		),
+		cqrs.NewEventHandler(
+			"OpsBookingReadModel.OnBookingMade",
+			opsBookingReadModel.OnBookingMade,
+		),
+		cqrs.NewEventHandler(
+			"OpsBookingReadModel.OnTicketBookingConfirmed",
+			opsBookingReadModel.OnTicketBookingConfirmed,
+		),
+		cqrs.NewEventHandler(
+			"OpsBookingReadModel.OnTicketReceiptIssued",
+			opsBookingReadModel.OnTicketReceiptIssued,
+		),
+		cqrs.NewEventHandler(
+			"OpsBookingReadModel.OnTicketPrinted",
+			opsBookingReadModel.OnTicketPrinted,
+		),
+		cqrs.NewEventHandler(
+			"OpsBookingReadModel.OnTicketRefunded",
+			opsBookingReadModel.OnTicketRefunded,
 		),
 	)
 
