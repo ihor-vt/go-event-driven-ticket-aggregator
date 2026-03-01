@@ -63,6 +63,8 @@ func New(
 		eventBus,
 	)
 
+	opsBookingReadModel := event.NewOpsBookingReadModel(dbConn)
+
 	commandsHandler := command.NewHandler(
 		eventBus,
 		receiptsService,
@@ -79,6 +81,7 @@ func New(
 		redisPublisher,
 		eventProcessorConfig,
 		eventsHandler,
+		opsBookingReadModel,
 		commandProcessorConfig,
 		commandsHandler,
 		watermillLogger,
