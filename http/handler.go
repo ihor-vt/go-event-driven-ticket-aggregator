@@ -14,6 +14,7 @@ type Handler struct {
 	ticketsRepo        TicketsRepository
 	showsRepository    ShowsRepository
 	bookingsRepository BookingsRepository
+	opsBookingRepo     OpsBookingRepository
 }
 
 type TicketsRepository interface {
@@ -22,4 +23,9 @@ type TicketsRepository interface {
 
 type ShowsRepository interface {
 	AddShow(ctx context.Context, show entities.Show) error
+}
+
+type OpsBookingRepository interface {
+	AllBookings(ctx context.Context, receiptIssueDate *string) ([]entities.OpsBooking, error)
+	BookingReadModel(ctx context.Context, bookingID string) (entities.OpsBooking, error)
 }

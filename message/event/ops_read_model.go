@@ -35,7 +35,10 @@ func (r OpsBookingReadModel) OnBookingMade(ctx context.Context, event *entities.
 	return r.createReadModel(ctx, readModel)
 }
 
-func (r OpsBookingReadModel) OnTicketBookingConfirmed(ctx context.Context, event *entities.TicketBookingConfirmed) error {
+func (r OpsBookingReadModel) OnTicketBookingConfirmed(
+	ctx context.Context,
+	event *entities.TicketBookingConfirmed,
+) error {
 	return r.updateReadModelByBookingID(
 		ctx,
 		event.BookingID,
@@ -54,7 +57,10 @@ func (r OpsBookingReadModel) OnTicketBookingConfirmed(ctx context.Context, event
 	)
 }
 
-func (r OpsBookingReadModel) OnTicketReceiptIssued(ctx context.Context, event *entities.TicketReceiptIssued) error {
+func (r OpsBookingReadModel) OnTicketReceiptIssued(
+	ctx context.Context,
+	event *entities.TicketReceiptIssued,
+) error {
 	return r.updateReadModelByTicketID(
 		ctx,
 		event.TicketID,
@@ -67,7 +73,10 @@ func (r OpsBookingReadModel) OnTicketReceiptIssued(ctx context.Context, event *e
 	)
 }
 
-func (r OpsBookingReadModel) OnTicketPrinted(ctx context.Context, event *entities.TicketPrinted) error {
+func (r OpsBookingReadModel) OnTicketPrinted(
+	ctx context.Context,
+	event *entities.TicketPrinted,
+) error {
 	return r.updateReadModelByTicketID(
 		ctx,
 		event.TicketID,
@@ -80,7 +89,10 @@ func (r OpsBookingReadModel) OnTicketPrinted(ctx context.Context, event *entitie
 	)
 }
 
-func (r OpsBookingReadModel) OnTicketRefunded(ctx context.Context, event *entities.TicketRefunded) error {
+func (r OpsBookingReadModel) OnTicketRefunded(
+	ctx context.Context,
+	event *entities.TicketRefunded,
+) error {
 	return r.updateReadModelByTicketID(
 		ctx,
 		event.TicketID,
@@ -90,6 +102,55 @@ func (r OpsBookingReadModel) OnTicketRefunded(ctx context.Context, event *entiti
 			return ticket, nil
 		},
 	)
+}
+
+func (r OpsBookingReadModel) AllBookings(ctx context.Context, receiptIssueDate *string) ([]entities.OpsBooking, error) {
+	query := "SELECT payload FROM read_model_ops_bookings"
+	var queryArgs []any
+
+	if receiptIssueDate != nil {
+		query += `
+			WHERE booking_id IN (
+				SELECT booking_id FROM (
+					SELECT booking_id, 
+						DATE(jsonb_path_query(payload, '$.tickets.*.receipt_issued_at')::text) as receipt_issued_at 
+					FROM 
+						read_model_ops_bookings
+				) bookings_within_date 
+				WHERE receipt_issued_at = $1
+			)`
+		queryArgs = append(queryArgs, *receiptIssueDate)
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []entities.OpsBooking
+	for rows.Next() {
+		var payload []byte
+		if err := rows.Scan(&payload); err != nil {
+			return nil, err
+		}
+
+		reservation, err := r.unmarshalReadModelFromDB(payload)
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, reservation)
+	}
+
+	return result, nil
+}
+
+func (r OpsBookingReadModel) BookingReadModel(
+	ctx context.Context,
+	bookingID string,
+) (entities.OpsBooking, error) {
+	return r.findReadModelByBookingID(ctx, bookingID, r.db)
 }
 
 func (r OpsBookingReadModel) createReadModel(
@@ -108,7 +169,6 @@ func (r OpsBookingReadModel) createReadModel(
 			($1, $2)
 		ON CONFLICT (booking_id) DO NOTHING;
 `, payload, booking.BookingID)
-
 	if err != nil {
 		return fmt.Errorf("could not create read model: %w", err)
 	}
