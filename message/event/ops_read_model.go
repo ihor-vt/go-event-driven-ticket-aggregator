@@ -48,7 +48,7 @@ func (r OpsBookingReadModel) OnTicketBookingConfirmed(
 			ticket.PriceAmount = event.Price.Amount
 			ticket.PriceCurrency = event.Price.Currency
 			ticket.CustomerEmail = event.CustomerEmail
-			ticket.Status = "confirmed"
+			ticket.ConfirmedAt = event.Header.PublishedAt
 
 			rm.Tickets[event.TicketID] = ticket
 
@@ -97,7 +97,7 @@ func (r OpsBookingReadModel) OnTicketRefunded(
 		ctx,
 		event.TicketID,
 		func(ticket entities.OpsTicket) (entities.OpsTicket, error) {
-			ticket.Status = "refunded"
+			ticket.RefundedAt = event.Header.PublishedAt
 
 			return ticket, nil
 		},
